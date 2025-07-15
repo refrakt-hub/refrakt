@@ -1,0 +1,12 @@
+[submodule "external/refrakt_core"]
+	path = external/refrakt_core
+	url = https://github.com/refrakt-hub/refrakt_core.git
+[submodule "external/refrakt_cli"]
+	path = external/refrakt_cli
+	url = https://github.com/refrakt-hub/refrakt_cli.git
+[submodule "external/refrakt_viz"]
+	path = external/refrakt_viz
+	url = https://github.com/refrakt-hub/refrakt_viz.git
+[submodule "external/refrakt_xai"]
+	path = external/refrakt_xai
+	url = https://github.com/refrakt-hub/refrakt_xai.git
