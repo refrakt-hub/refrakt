@@ -197,3 +197,4 @@ checkpoints/
 data/
 logs/
 visualizations/
+*.py
