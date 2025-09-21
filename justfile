@@ -19,12 +19,15 @@ setup-tunnels:
 install:
     #!/usr/bin/env bash
     echo "📦 Installing Refrakt dependencies..."
-    uv sync
+    echo "🔧 Setting up UV virtual environment..."
+    uv venv
     echo "🔧 Installing editable packages..."
     uv pip install --editable ./src/refrakt_core
     uv pip install --editable ./src/refrakt_cli  
     uv pip install --editable ./src/refrakt_viz
     uv pip install --editable ./src/refrakt_xai
+    echo "🔧 Installing backend dependencies..."
+    uv pip install -r pyproject.toml
     echo "✅ Installation complete!"
 
 # Start all services (development)

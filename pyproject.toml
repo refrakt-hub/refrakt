@@ -39,6 +39,12 @@ members = [
     "src/refrakt_xai",
 ]
 
+[tool.uv.sources]
+refrakt-core = { workspace = true }
+refrakt-cli = { workspace = true }
+refrakt-viz = { workspace = true }
+refrakt-xai = { workspace = true }
+
 [tool.black]
 line-length = 88
 
