@@ -1,0 +1,51 @@
+[project]
+name = "refrakt"
+version = "1.0.0"
+description = "Refrakt ML/DL Framework - Natural Language Orchestrator for Scalable ML Workflows"
+readme = "README.md"
+authors = [
+    { name = "Akshath Mangudi", email = "akshathmangudi@gmail.com" }
+]
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "google-generativeai",
+    "pydantic",
+    "pyyaml",
+    "python-multipart",
+    "python-dotenv",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/refrakt-hub/refrakt"
+"Bug Tracker" = "https://github.com/refrakt-hub/refrakt/issues"
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=7.0.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0.0",
+    "isort>=5.12.0",
+]
+
+[tool.uv.workspace]
+members = [
+    "src/refrakt_core",
+    "src/refrakt_cli", 
+    "src/refrakt_viz",
+    "src/refrakt_xai",
+]
+
+[tool.black]
+line-length = 88
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+lint.select = ["E", "F", "B", "I"]
+
+[tool.isort]
+profile = "black"

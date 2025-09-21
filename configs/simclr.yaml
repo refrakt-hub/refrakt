@@ -1,0 +1,83 @@
+runtime:
+  mode: pipeline
+  log_type: []
+  # hooks: 
+  #   visualizations: 
+  #     - method: embedding_space
+      # - method: cluster_assignments
+      # - method: contrastive_loss_curve
+      # - method: nearest_neighbors
+      # - method: pair_similarity
+    # explainability: 
+    #   - method: saliency
+    #   - method: occlusion
+    # explain: true
+
+dataset:
+  name: CIFAR10
+  params:
+    root: "./data"
+    train: true
+    download: true
+  wrapper: contrastive  # Wrapper to apply contrastive transforms
+  transform:
+    - name: RandomResizedCrop
+      params:
+        size: 32
+    - name: RandomHorizontalFlip
+      params:
+        p: 0.5
+    - name: RandomApply
+      params:
+        transforms:
+          - name: ColorJitter
+            params:
+              brightness: 0.4
+              contrast: 0.4
+              saturation: 0.4
+              hue: 0.1
+        p: 0.8
+    - name: RandomGrayscale
+      params:
+        p: 0.2
+    - name: ToTensor
+    - name: Normalize
+      params:
+        mean: [0.4914, 0.4822, 0.4465]
+        std: [0.2023, 0.1994, 0.2010]
+
+dataloader:
+  params:
+    batch_size: 64
+    shuffle: true
+    num_workers: 4 # Set to 0 for simplicity, adjust as needed
+    drop_last: false
+
+model:
+  name: simclr
+  wrapper: simclr
+  params:
+    proj_dim: 128  # Projection dimension
+
+loss:
+  name: ntxent_wrapped
+  mode: embedding
+  params:
+    temperature: 0.5
+
+optimizer:
+  name: adam
+  params:
+    lr: 0.00015
+    weight_decay: 0.0
+
+scheduler:
+  name: null
+  params: null
+
+trainer:
+  name: contrastive  # Matches ContrastiveTrainer
+  params:
+    save_dir: "./checkpoints"
+    num_epochs: 1
+    device: cuda

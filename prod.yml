@@ -1,0 +1,7 @@
+tunnel: 220bc2f3-cd03-4c06-b658-20c8c718cc04
+credentials-file: ./cloudflare/220bc2f3-cd03-4c06-b658-20c8c718cc04.json
+
+ingress: 
+  - hostname: refrakt.akshath.tech
+    service: http://localhost:8002
+  - service: http_status:404

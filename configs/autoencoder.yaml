@@ -1,0 +1,74 @@
+runtime: 
+  mode: pipeline
+  log_type: []
+  # hooks: 
+  #   explainability:
+  #     - method: occlusion
+  #     - method: latent_attribution
+  #     - method: quality_attribution
+  #     - method: reconstruction_attribution
+  #     - method: deeplift
+  #   explain: true
+  #   visualizations: 
+  #     - method: disentanglement_analysis
+  #     - method: feature_attribution
+  #     - method: latent_space_projection
+  #     - method: reconstruction_viz
+  #     - method: sample_generation
+
+dataset:
+  name: "MNIST"
+  params:
+    root: "./data"
+    train: true
+    download: true
+  transform:
+    - name: ToTensor
+    - name: Normalize
+      params:
+        mean: [0.1307]
+        std: [0.3081]
+    - name: flatten
+
+dataloader:
+  params:
+    batch_size: 64
+    shuffle: true
+    num_workers: 4
+    drop_last: false
+
+model:
+  name: "autoencoder"
+  wrapper: autoencoder
+  params:
+    input_dim: 784
+    hidden_dim: 32
+    variant: simple
+  # fusion:
+  #   type: sklearn
+  #   model: random_forest
+  #   params:
+  #     n_estimators: 100
+  #     max_depth: 10
+
+loss:
+  name: "mse_wrapped"
+  mode: "reconstruction"
+  params: {}
+
+optimizer:
+  name: "adam"
+  params:
+    lr: 0.001
+    weight_decay: 0.0
+
+scheduler:
+  name: null
+  params: null
+
+trainer:
+  name: "autoencoder"
+  params:
+    save_dir: "./checkpoints"
+    num_epochs: 1
+    device: "cuda"

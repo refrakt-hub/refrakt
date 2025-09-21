@@ -1,0 +1,85 @@
+runtime:
+  mode: pipeline
+  log_type: []
+  hooks: 
+    # explainability: 
+    #   # - method: saliency
+    #   - method: occlusion
+    #   # - method: reconstruction_attribution
+    #   # - method: quality_attribution
+    #   #   params:
+    #   #     quality_metric: "psnr"
+    # visualizations: 
+    #   - method: reconstruction_viz
+    #   - method: sample_generation
+    # explain: true
+
+dataset:
+  name: "super_resolution"
+  params:
+    lr_dir: "./data/DIV2K/train/LR"
+    hr_dir: "./data/DIV2K/train/HR"
+  transform:
+    - name: "paired"
+      params:
+        crop_size: 96
+
+dataloader:
+  params:
+    batch_size: 2
+    shuffle: true
+    num_workers: 4
+    drop_last: true
+
+model:
+  name: "srgan"
+  wrapper: "srgan"
+  params:
+    scale_factor: 4
+
+loss:
+  components:
+    discriminator:
+      name: gan_wrapped
+      mode: logits
+      params:
+        loss_params:
+          use_lsgan: false
+          device: cuda
+
+    generator:
+      name: l1
+      mode: image
+      params: {}
+
+    # Optional:
+    # perceptual:
+    #   name: perceptual_vgg
+    #   mode: image
+    #   params:
+    #     layers: ["relu3_3"]
+    #     weight: 1.0
+
+optimizer:
+  components:
+    generator:
+      name: "adam"
+      params:
+        lr: 1e-3
+        betas: [0.9, 0.999]
+    discriminator:
+      name: "adam"  # Could be different, e.g., "rmsprop"
+      params:
+        lr: 1e-3
+        betas: [0.9, 0.999]
+
+scheduler:
+  name: null
+  params: null
+
+trainer:
+  name: "gan"
+  params:
+    save_dir: "./checkpoints"
+    num_epochs: 1
+    device: "cuda"

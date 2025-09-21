@@ -1,0 +1,75 @@
+runtime:
+  mode: pipeline
+  log_type: []
+  # log_type: [tensorboard, wandb]
+  # hooks:
+  #   visualizations: 
+  #     - method: confusion_matrix
+  #     - method: computation_graph
+  #     - method: loss_accuracy
+  #     - method: per_layer_metrics
+  #     - method: sample_predictions
+  #   explainability:
+  #     - method: layer_gradcam
+  #       layer: layer1.1.conv2.0
+  #     - method: occlusion
+  #     - method: saliency
+  #   explain: true
+
+dataset:
+  name: MNIST
+  params:
+    root: ./data
+    train: true
+    download: true
+  transform:
+    - name: Resize
+      params: { size: [28, 28] }
+    - name: ToTensor
+    - name: Normalize
+      params:
+        mean: [0.1307]
+        std: [0.3081]
+
+dataloader:
+  params:
+    batch_size: 32
+    shuffle: true
+    num_workers: 4
+    drop_last: false
+
+model:
+  name: resnet18
+  wrapper: resnet
+  params:
+    in_channels: 1
+    num_classes: 10
+  # fusion:
+  #   type: sklearn
+  #   model: svc
+  #   params:
+  #     C: 1.0
+  #     kernel: rbf
+
+loss:
+  name: ce_wrapped
+  mode: logits
+  params: {}
+
+optimizer:
+  name: adamw
+  params:
+    lr: 0.0001
+    weight_decay: 0.01
+
+scheduler:
+  name: cosine
+  params:
+    T_max: 100
+
+trainer:
+  name: supervised
+  params:
+    save_dir: "./checkpoints"
+    num_epochs: 1
+    device: cuda
