@@ -22,59 +22,48 @@ install:
     echo "🔧 Setting up UV virtual environment..."
     uv venv
     echo "🔧 Installing editable packages..."
-    uv pip install --editable ./src/refrakt_core
-    uv pip install --editable ./src/refrakt_cli  
-    uv pip install --editable ./src/refrakt_viz
-    uv pip install --editable ./src/refrakt_xai
+    uv run pip install --editable ./src/refrakt_core
+    uv run pip install --editable ./src/refrakt_cli  
+    uv run pip install --editable ./src/refrakt_viz
+    uv run pip install --editable ./src/refrakt_xai
     echo "🔧 Installing backend dependencies..."
-    uv pip install -r pyproject.toml
+    uv run pip install -r pyproject.toml
     echo "✅ Installation complete!"
 
-# Start all services (development)
-start:
-    just start-tunnel-dev &
-    just start-backend-dev
-    wait
-
-# Cloudflare tunnel (development)
-start-tunnel-dev:
+# Individual process commands
+start-tunnel:
     #!/usr/bin/env bash
     echo "🌐 Starting Cloudflare tunnel (dev)..."
     echo "🔗 Tunnel will be available at: $CLOUDFLARE_DOMAIN"
     cloudflared tunnel --config $CLOUDFLARE_TUNNEL_CONFIG run
 
-# Backend (development)
-start-backend-dev:
+start-backend:
     #!/usr/bin/env bash
     echo "🚀 Starting Refrakt backend (dev)..."
     echo "📡 Backend will be available at: http://localhost:$PORT"
     echo "📚 API docs: http://localhost:$PORT/docs"
     uv run python backend.py dev
 
-# Production commands (use justfile.prod)
-start-prod:
-    #!/usr/bin/env bash
-    echo "🚀 Starting production environment..."
-    echo "💡 Use: just --justfile justfile.prod start"
-    just --justfile justfile.prod start
+# Main start command with mprocs (two-column layout)
+start:
+    mprocs \
+        --names "tunnel,backend" \
+        "just start-tunnel" \
+        "just start-backend"
+
+# Development helper
+dev:
+    just install
+    just start
 
 # Clean up processes
 stop:
     #!/usr/bin/env bash
     echo "🛑 Stopping all Refrakt processes..."
-    pkill -f cloudflared || echo "No cloudflared processes found"
-    pkill -f "python backend.py" || echo "No backend processes found"
+    -pkill -f "mprocs.*tunnel,backend"
+    -pkill -f "cloudflared" || echo "No cloudflared processes found"
+    -pkill -f "python backend.py" || echo "No backend processes found"
     echo "✅ All processes stopped"
-
-# Development helpers
-dev:
-    just install
-    just start
-
-# Production deployment
-deploy:
-    just install
-    just start-prod
 
 # Quick development restart
 restart:
@@ -131,13 +120,12 @@ help:
     echo ""
     echo "Development:"
     echo "  just dev              - Install deps and start dev environment"
-    echo "  just start            - Start dev environment (tunnel + backend)"
+    echo "  just start            - Start dev environment with mprocs (two-column layout)"
     echo "  just restart          - Restart dev environment"
     echo ""
-    echo "Production:"
-    echo "  just deploy           - Install deps and start prod environment"
-    echo "  just start-prod       - Start prod environment (uses justfile.prod)"
-    echo "  just --justfile justfile.prod start  - Direct prod start"
+    echo "Individual processes:"
+    echo "  just start-tunnel     - Start tunnel only"
+    echo "  just start-backend    - Start backend only"
     echo ""
     echo "Management:"
     echo "  just stop             - Stop all processes"
