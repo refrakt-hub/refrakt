@@ -91,7 +91,7 @@ Thumbs.db
 # =============================================================================
 
 # Cloudflare tunnel credentials (sensitive)
-cloudflare/*.json
+# cloudflare/*.json
 
 # Refrakt data directories
 checkpoints/
