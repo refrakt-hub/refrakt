@@ -1,0 +1,48 @@
+# Production Justfile for Refrakt Application
+# Natural Language Orchestrator for Scalable ML/DL Workflows
+
+# Load environment variables from prod.env
+set dotenv-path := "prod.env"
+
+# Start all services (production)  
+start:
+    just start-tunnel &
+    just start-backend
+    wait
+
+# Cloudflare tunnel (production)
+start-tunnel:
+    #!/usr/bin/env bash
+    echo "🌐 Starting Cloudflare tunnel (prod)..."
+    echo "🔗 Tunnel will be available at: $CLOUDFLARE_DOMAIN"
+    cloudflared tunnel --config $CLOUDFLARE_TUNNEL_CONFIG run
+
+# Backend (production)
+start-backend:
+    #!/usr/bin/env bash
+    echo "🚀 Starting Refrakt backend (prod)..."
+    echo "📡 Backend will be available at: http://localhost:$PORT"
+    echo "📚 API docs: http://localhost:$PORT/docs"
+    uv run python backend.py prod
+
+# Clean up processes
+stop:
+    #!/usr/bin/env bash
+    echo "🛑 Stopping all Refrakt processes..."
+    pkill -f cloudflared || echo "No cloudflared processes found"
+    pkill -f "python backend.py" || echo "No backend processes found"
+    echo "✅ All processes stopped"
+
+# Show status of running processes
+status:
+    #!/usr/bin/env bash
+    echo "🔍 Checking Refrakt processes..."
+    echo ""
+    echo "Cloudflare tunnels:"
+    ps aux | grep cloudflared | grep -v grep || echo "  No tunnel processes running"
+    echo ""
+    echo "Backend processes:"
+    ps aux | grep "python backend.py" | grep -v grep || echo "  No backend processes running"
+    echo ""
+    echo "Port usage:"
+    netstat -tlnp 2>/dev/null | grep -E ":(8001|8002)" || echo "  No Refrakt ports in use"

@@ -1,8 +1,8 @@
 # Justfile for Refrakt Application
 # Natural Language Orchestrator for Scalable ML/DL Workflows
 
-# Default environment
-set environment-file := "dev.env"
+# Load environment variables from dev.env by default
+set dotenv-path := "dev.env"
 
 # Setup tunnel credentials (run once)
 setup-tunnels:
@@ -33,25 +33,10 @@ start:
     just start-backend-dev
     wait
 
-# Start all services (production)  
-start-prod:
-    set environment-file := "prod.env"
-    just start-tunnel-prod &
-    just start-backend-prod
-    wait
-
 # Cloudflare tunnel (development)
 start-tunnel-dev:
     #!/usr/bin/env bash
     echo "🌐 Starting Cloudflare tunnel (dev)..."
-    echo "🔗 Tunnel will be available at: $CLOUDFLARE_DOMAIN"
-    cloudflared tunnel --config $CLOUDFLARE_TUNNEL_CONFIG run
-
-# Cloudflare tunnel (production)
-start-tunnel-prod:
-    #!/usr/bin/env bash
-    set environment-file := "prod.env"
-    echo "🌐 Starting Cloudflare tunnel (prod)..."
     echo "🔗 Tunnel will be available at: $CLOUDFLARE_DOMAIN"
     cloudflared tunnel --config $CLOUDFLARE_TUNNEL_CONFIG run
 
@@ -63,14 +48,12 @@ start-backend-dev:
     echo "📚 API docs: http://localhost:$PORT/docs"
     uv run python backend.py dev
 
-# Backend (production)
-start-backend-prod:
+# Production commands (use justfile.prod)
+start-prod:
     #!/usr/bin/env bash
-    set environment-file := "prod.env"
-    echo "🚀 Starting Refrakt backend (prod)..."
-    echo "📡 Backend will be available at: http://localhost:$PORT"
-    echo "📚 API docs: http://localhost:$PORT/docs"
-    uv run python backend.py prod
+    echo "🚀 Starting production environment..."
+    echo "💡 Use: just --justfile justfile.prod start"
+    just --justfile justfile.prod start
 
 # Clean up processes
 stop:
@@ -150,7 +133,8 @@ help:
     echo ""
     echo "Production:"
     echo "  just deploy           - Install deps and start prod environment"
-    echo "  just start-prod       - Start prod environment"
+    echo "  just start-prod       - Start prod environment (uses justfile.prod)"
+    echo "  just --justfile justfile.prod start  - Direct prod start"
     echo ""
     echo "Management:"
     echo "  just stop             - Stop all processes"
