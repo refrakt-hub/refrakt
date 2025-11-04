@@ -1,12 +1,16 @@
 [submodule "src/refrakt_core"]
 	path = src/refrakt_core
 	url = https://github.com/refrakt-hub/refrakt_core.git
+	branch = main
 [submodule "src/refrakt_cli"]
 	path = src/refrakt_cli
 	url = https://github.com/refrakt-hub/refrakt_cli.git
+	branch = main
 [submodule "src/refrakt_viz"]
 	path = src/refrakt_viz
 	url = https://github.com/refrakt-hub/refrakt_viz.git
+	branch = main
 [submodule "src/refrakt_xai"]
 	path = src/refrakt_xai
 	url = https://github.com/refrakt-hub/refrakt_xai.git
+	branch = main
