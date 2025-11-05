@@ -19,7 +19,6 @@ The server will run on:
 
 import asyncio
 import os
-import re
 import shutil
 import subprocess
 import tempfile
@@ -345,29 +344,6 @@ def extract_model_name(config: dict) -> Optional[str]:
     return model_name
 
 
-def extract_experiment_id(output_lines: list[str]) -> Optional[str]:
-    """
-    Extract experiment_id from log output.
-    
-    Args:
-        output_lines: List of log output lines
-    
-    Returns:
-        Experiment ID (YYYYMMDD_HHMMSS) or None if not found
-    """
-    # Pattern: "🔬 Experiment ID: 20251105_174807" or "Experiment ID: 20251105_174807"
-    for line in output_lines:
-        if "Experiment ID:" in line:
-            # Extract the experiment_id using regex
-            # Match pattern: "Experiment ID: YYYYMMDD_HHMMSS"
-            match = re.search(r'Experiment ID:\s*(\d{8}_\d{6})', line)
-            if match:
-                experiment_id = match.group(1)
-                print(f"DEBUG: Extracted experiment_id: {experiment_id}")
-                return experiment_id
-    return None
-
-
 def consolidate_log_files(job_id: str, model_name: Optional[str]) -> bool:
     """
     Move log files from jobs/{job_id}/{model_name}/ to jobs/{job_id}/ and remove empty model_name directory.
@@ -417,72 +393,6 @@ def consolidate_log_files(job_id: str, model_name: Optional[str]) -> bool:
         return False
 
 
-def copy_checkpoint_files_to_job_dir(
-    job_id: str, 
-    experiment_id: Optional[str], 
-    model_name: Optional[str],
-    config_path: str
-) -> bool:
-    """
-    Copy all checkpoint files from checkpoints directory to job directory.
-    
-    Args:
-        job_id: Job ID
-        experiment_id: Experiment ID (timestamp format: YYYYMMDD_HHMMSS)
-        model_name: Model name (e.g., "resnet18")
-        config_path: Path to the YAML config file used for training
-    
-    Returns:
-        True if files were copied successfully, False otherwise
-    """
-    if not experiment_id or not model_name:
-        print(f"DEBUG: Cannot copy checkpoint files - missing experiment_id or model_name")
-        print(f"DEBUG: experiment_id={experiment_id}, model_name={model_name}")
-        return False
-    
-    # Construct checkpoint directory path
-    checkpoint_dir = os.path.join("./checkpoints", f"{model_name}_{experiment_id}")
-    job_dir = f"./jobs/{job_id}"
-    
-    if not os.path.exists(checkpoint_dir):
-        print(f"DEBUG: Checkpoint directory not found: {checkpoint_dir}")
-        return False
-    
-    try:
-        # Copy all contents from checkpoint directory to job directory
-        # This includes: weights/, explanations/, *.yaml, *.joblib, etc.
-        for item in os.listdir(checkpoint_dir):
-            src = os.path.join(checkpoint_dir, item)
-            dst = os.path.join(job_dir, item)
-            
-            if os.path.isdir(src):
-                # Copy directory recursively
-                if os.path.exists(dst):
-                    shutil.rmtree(dst)
-                shutil.copytree(src, dst)
-                print(f"DEBUG: Copied directory {item} to job directory")
-            else:
-                # Copy file
-                shutil.copy2(src, dst)
-                print(f"DEBUG: Copied file {item} to job directory")
-        
-        # Also copy the config YAML file that was used for training
-        if os.path.exists(config_path):
-            config_dst = os.path.join(job_dir, os.path.basename(config_path))
-            # Also save with a more descriptive name
-            config_dst_named = os.path.join(job_dir, f"{model_name}.yaml")
-            shutil.copy2(config_path, config_dst)
-            shutil.copy2(config_path, config_dst_named)
-            print(f"DEBUG: Copied config file to job directory")
-        
-        print(f"DEBUG: Successfully copied all checkpoint files from {checkpoint_dir} to {job_dir}")
-        return True
-        
-    except Exception as e:
-        print(f"DEBUG: Error copying checkpoint files: {e}")
-        return False
-
-
 async def run_refrakt_job(job_id: str, config_path: str):
     """Run refrakt CLI job in background"""
     try:
@@ -512,7 +422,7 @@ async def run_refrakt_job(job_id: str, config_path: str):
         
         print(f"DEBUG: Running command: {' '.join(cmd)}")
         
-        # Prepare environment variables for tqdm
+        # Prepare environment variables for tqdm and backend detection
         # When stdout is piped, tqdm should automatically detect non-TTY
         # and use newlines instead of carriage returns. We set these to help.
         env = os.environ.copy()
@@ -522,6 +432,10 @@ async def run_refrakt_job(job_id: str, config_path: str):
             env['TERM'] = 'xterm-256color'
         # Force tqdm to use newlines when not in TTY (it should auto-detect, but this helps)
         env['TQDM_DISABLE'] = '0'  # Keep tqdm enabled, but let it auto-format
+        
+        # Set environment variable to indicate backend execution and job directory
+        # This provides a reliable way for refrakt_core to detect backend execution
+        env['REFRAKT_JOB_DIR'] = output_dir
         
         # Run the command with real-time output streaming
         process = await asyncio.create_subprocess_exec(
@@ -549,24 +463,9 @@ async def run_refrakt_job(job_id: str, config_path: str):
         
         # Update job status
         if process.returncode == 0:
-            # Extract experiment_id from logs (model_name already extracted from config)
-            experiment_id = extract_experiment_id(output_lines)
-            
-            # Copy checkpoint files to job directory
-            if experiment_id and model_name:
-                copy_success = copy_checkpoint_files_to_job_dir(
-                    job_id, experiment_id, model_name, config_path
-                )
-                if copy_success:
-                    print(f"DEBUG: Checkpoint files copied to job directory")
-                else:
-                    print(f"DEBUG: Warning: Failed to copy checkpoint files to job directory")
-                
-                # Consolidate log files: move from jobs/{job_id}/{model_name}/ to jobs/{job_id}/
-                consolidate_log_files(job_id, model_name)
-            else:
-                print(f"DEBUG: Warning: Could not extract experiment_id or model_name")
-                print(f"DEBUG: experiment_id={experiment_id}, model_name={model_name}")
+            # Files are now saved directly to job directory during pipeline execution
+            # Logs are also saved directly to jobs/{job_id}/*.log (no model_name subdirectory)
+            # No consolidation needed anymore
             
             jobs[job_id]["status"] = "completed"
             jobs[job_id]["result_path"] = output_dir

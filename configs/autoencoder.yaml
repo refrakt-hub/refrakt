@@ -1,14 +1,14 @@
 runtime: 
   mode: pipeline
   log_type: []
-  # hooks: 
-  #   explainability:
-  #     - method: occlusion
-  #     - method: latent_attribution
-  #     - method: quality_attribution
-  #     - method: reconstruction_attribution
-  #     - method: deeplift
-  #   explain: true
+  hooks: 
+    explainability:
+      - method: occlusion
+      - method: latent_attribution
+      - method: quality_attribution
+      - method: reconstruction_attribution
+      - method: deeplift
+    explain: true
   #   visualizations: 
   #     - method: disentanglement_analysis
   #     - method: feature_attribution
