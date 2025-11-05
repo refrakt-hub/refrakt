@@ -11,7 +11,7 @@ requires-python = ">=3.10"
 dependencies = [
     "fastapi",
     "uvicorn",
-    "google-generativeai",
+    "openai>=1.0.0",
     "pydantic",
     "pyyaml",
     "python-multipart",
