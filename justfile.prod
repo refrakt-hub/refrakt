@@ -1,36 +1,85 @@
 # Production Justfile for Refrakt Application
 # Natural Language Orchestrator for Scalable ML/DL Workflows
 
-# Load environment variables from prod.env
+# Load environment variables from prod.env (fallback if not using Doppler)
 set dotenv-path := "prod.env"
 
-# Start all services (production)  
+# Registry and image configuration
+# Override with environment variables:
+#   REGISTRY="ghcr.io/yourusername"  (default: "refrakt")
+#   TAG="latest"                      (default: "latest")
+# Examples: "ghcr.io/yourusername", "docker.io/yourusername", "your-registry.com"
+
+# Start all services (production) with Docker Compose and Doppler
 start:
-    just start-tunnel &
-    just start-backend
-    wait
+    just start-docker
 
-# Cloudflare tunnel (production)
-start-tunnel:
+# Start production services with Docker Compose and Doppler
+start-docker:
     #!/usr/bin/env bash
-    echo "🌐 Starting Cloudflare tunnel (prod)..."
-    echo "🔗 Tunnel will be available at: $CLOUDFLARE_DOMAIN"
-    cloudflared tunnel --config $CLOUDFLARE_TUNNEL_CONFIG run
+    echo "🚀 Starting Refrakt production environment with Docker Compose and Doppler..."
+    # Pull Cloudflare configs from Doppler first (for tunnel if needed)
+    if [ -f scripts/setup-cloudflare-from-doppler.sh ]; then
+        echo "🔐 Pulling Cloudflare configs from Doppler..."
+        ./scripts/setup-cloudflare-from-doppler.sh prod
+    fi
+    # Start services with Docker Compose using Doppler for secrets
+    doppler run -c prod -- docker compose -f docker-compose.prod.yml up -d
+    echo "✅ Production services started"
+    echo "📊 View logs: just logs"
+    echo "🛑 Stop services: just stop"
 
-# Backend (production)
-start-backend:
+# Start production services with Docker Compose (legacy - uses prod.env)
+start-docker-legacy:
     #!/usr/bin/env bash
-    echo "🚀 Starting Refrakt backend (prod)..."
-    echo "📡 Backend will be available at: http://localhost:$PORT"
-    echo "📚 API docs: http://localhost:$PORT/docs"
-    uv run python backend.py prod
+    echo "🚀 Starting Refrakt production environment with Docker Compose (using prod.env)..."
+    docker compose -f docker-compose.prod.yml up -d
+    echo "✅ Production services started"
 
-# Clean up processes
+# View logs for production services
+logs:
+    #!/usr/bin/env bash
+    docker compose -f docker-compose.prod.yml logs -f
+
+# View logs for specific service
+logs-backend:
+    #!/usr/bin/env bash
+    docker compose -f docker-compose.prod.yml logs -f backend
+
+logs-worker:
+    #!/usr/bin/env bash
+    docker compose -f docker-compose.prod.yml logs -f worker
+
+logs-redis:
+    #!/usr/bin/env bash
+    docker compose -f docker-compose.prod.yml logs -f redis
+
+# Stop production services
 stop:
+    #!/usr/bin/env bash
+    echo "🛑 Stopping production services..."
+    docker compose -f docker-compose.prod.yml down
+    echo "✅ Production services stopped"
+
+# Restart production services
+restart:
+    #!/usr/bin/env bash
+    just stop
+    just start
+
+# Rebuild and start production services
+rebuild:
+    #!/usr/bin/env bash
+    echo "🔨 Rebuilding production images..."
+    doppler run -c prod -- docker compose -f docker-compose.prod.yml build
+    just start
+
+# Clean up processes (legacy - for non-Docker deployments)
+stop-legacy:
     #!/usr/bin/env bash
     echo "🛑 Stopping all Refrakt processes..."
     pkill -f cloudflared || echo "No cloudflared processes found"
-    pkill -f "python backend.py" || echo "No backend processes found"
+    pkill -f "python -m backend.main" || echo "No backend processes found"
     echo "✅ All processes stopped"
 
 # Show status of running processes
@@ -42,7 +91,7 @@ status:
     ps aux | grep cloudflared | grep -v grep || echo "  No tunnel processes running"
     echo ""
     echo "Backend processes:"
-    ps aux | grep "python backend.py" | grep -v grep || echo "  No backend processes running"
+    ps aux | grep "python -m backend.main" | grep -v grep || echo "  No backend processes running"
     echo ""
     echo "Port usage:"
     netstat -tlnp 2>/dev/null | grep -E ":(8001|8002)" || echo "  No Refrakt ports in use"

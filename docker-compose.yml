@@ -1,0 +1,109 @@
+# Enable BuildKit for faster builds with cache mounts
+# Set DOCKER_BUILDKIT=1 environment variable or use: docker compose build --build-arg BUILDKIT_INLINE_CACHE=1
+
+services:
+  # Redis service for queue and job repository
+  # Note: Port not exposed to host - only accessible via Docker network
+  # Backend and worker connect using: redis://redis:6379/0
+  redis:
+    image: redis:7-alpine
+    container_name: refrakt-redis
+    volumes:
+      - redis_data:/data
+    ports:
+      # Expose Redis to the host on a non-default port to avoid conflicts with any local Redis.
+      # The backend will use QUEUE_URL=redis://localhost:6380/0 to talk to this instance.
+      - "6380:6379"
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - refrakt-network
+
+  # SAQ Worker service
+  worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: refrakt-worker
+    # Run as host user to avoid permission issues with mounted volumes
+    user: "${UID:-1000}:${GID:-1000}"
+    command: python -m backend.worker_main
+    env_file:
+      - .env
+    environment:
+      # Environment configuration
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      # Override QUEUE_URL to use the Redis container name
+      - QUEUE_URL=redis://refrakt-redis:6379/0
+    volumes:
+      - ./jobs:/app/jobs
+      - ./checkpoints:/app/checkpoints
+    depends_on:
+      redis:
+        condition: service_healthy
+    # Resource limits and GPU access
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    networks:
+      - refrakt-network
+    restart: unless-stopped
+
+  # Prometheus monitoring service
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: refrakt-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus/docker-entrypoint.sh:/docker-entrypoint.sh
+      - prometheus_data:/prometheus
+    entrypoint: ["/bin/sh", "/docker-entrypoint.sh"]
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=15d'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    environment:
+      - ENVIRONMENT=development
+      # Bearer token for scraping (optional - only used if set)
+      - PROMETHEUS_BEARER_TOKEN=${PROMETHEUS_BEARER_TOKEN:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # Prometheus only depends on Redis for metrics labels; backend is the local dev server
+    networks:
+      - refrakt-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  redis_data:
+    driver: local
+  prometheus_data:
+    driver: local
+
+networks:
+  refrakt-network:
+    driver: bridge
+

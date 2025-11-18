@@ -1,7 +1,0 @@
-tunnel: 44be8fcd-b7b9-495b-bd07-8a67e9b0831e
-credentials-file: /home/akshathm/.cloudflared/44be8fcd-b7b9-495b-bd07-8a67e9b0831e.json
-
-ingress:
-  - hostname: dev.akshath.tech
-    service: http://localhost:8001
-  - service: http_status:404

@@ -1,0 +1,29 @@
+# Prometheus configuration for Refrakt Backend (Production)
+# This file is used by the Prometheus Docker container in production
+# Backend runs in Docker, so we use the service name instead of host.docker.internal
+
+global:
+  scrape_interval: 10s      # Scrape targets every 10 seconds
+  evaluation_interval: 10s  # Evaluate rules every 10 seconds
+  scrape_timeout: 10s       # Timeout for scrape requests
+  external_labels:
+    cluster: 'refrakt'
+    environment: 'production'
+
+scrape_configs:
+  # Scrape Refrakt Backend metrics
+  - job_name: 'refrakt-backend'
+    scrape_interval: 10s
+    scrape_timeout: 10s
+    metrics_path: '/metrics'  # Matches PROMETHEUS_METRICS_ROUTE default
+    scheme: 'http'            # HTTP since we're on Docker network (not via tunnel)
+    # bearer_token will be injected by docker-entrypoint.sh if PROMETHEUS_BEARER_TOKEN is set
+    # bearer_token: ''
+    
+    static_configs:
+      - targets:
+          - 'backend:8002'  # Production backend service in Docker network
+        labels:
+          service: 'refrakt-backend'
+          component: 'api'
+

@@ -1,0 +1,11 @@
+# Cloudflare Tunnel Configuration for Development
+# Copy this file to dev.yml and update with your actual tunnel ID and credentials path
+
+tunnel: __YOUR_DEV_TUNNEL_ID__
+credentials-file: ./cloudflare/__YOUR_DEV_TUNNEL_ID__.json
+
+ingress:
+  - hostname: dev.akshath.tech
+    service: http://localhost:8001
+  - service: http_status:404
+

@@ -1,0 +1,11 @@
+# Cloudflare Tunnel Configuration for Production
+# Copy this file to prod.yml and update with your actual tunnel ID and credentials path
+
+tunnel: __YOUR_PROD_TUNNEL_ID__
+credentials-file: ./cloudflare/__YOUR_PROD_TUNNEL_ID__.json
+
+ingress: 
+  - hostname: refrakt.akshath.tech
+    service: http://localhost:8002
+  - service: http_status:404
+

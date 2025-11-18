@@ -90,8 +90,18 @@ Thumbs.db
 # Refrakt Specific
 # =============================================================================
 
-# Cloudflare tunnel credentials (sensitive)
-# cloudflare/*.json
+# Cloudflare tunnel credentials and configs (sensitive)
+# These should be pulled from Doppler, not committed
+cloudflare/
+dev.yml
+prod.yml
+
+# Ignore all .yml files except examples and known safe configs
+*.yml
+!*.yml.example
+!docker-compose.yml
+!docker-compose.*.yml
+!prometheus/*.yml
 
 # Refrakt data directories
 checkpoints/
@@ -101,9 +111,12 @@ visualizations/
 explanations/
 explanations_inference/
 
-# Configuration files (optional - can be committed for closed repos)
-# dev.env
-# prod.env
+# Environment files with secrets (use Doppler or secrets manager instead)
+dev.env
+prod.env
+.env
+*.env
+!*.env.example
 
 # =============================================================================
 # Framework Specific (commented out for closed repo)

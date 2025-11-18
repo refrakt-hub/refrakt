@@ -1,0 +1,275 @@
+# Production Docker Compose for Refrakt Backend
+# This compose file orchestrates all production services including cloudflared
+# Usage: doppler run -c prod -- docker compose -f docker-compose.prod.yml up -d
+# 
+# Prerequisites:
+# - Doppler CLI installed and configured (doppler setup)
+# - Cloudflare configs pulled from Doppler (scripts/setup-cloudflare-from-doppler.sh prod)
+# - Refrakt image pushed to registry
+#
+# Image Configuration:
+# - Set REFRAKT_IMAGE environment variable to override default image name
+# - Default: refrakt:latest
+# - Example: export REFRAKT_IMAGE=ghcr.io/yourusername/refrakt:latest
+# - Or use: REFRAKT_IMAGE=your-registry/refrakt:latest docker compose -f docker-compose.prod.yml up -d
+
+services:
+  # Redis service for queue and job repository
+  redis:
+    image: redis:7-alpine
+    container_name: refrakt-redis-prod
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - refrakt-network
+    restart: unless-stopped
+
+  # FastAPI Backend service (production)
+  # Image name can be overridden with REFRAKT_IMAGE environment variable
+  backend:
+    image: ${REFRAKT_IMAGE:-refrakt:latest}
+    container_name: refrakt-backend-prod
+    # Note: No port mapping to host - cloudflared handles ingress
+    # Backend is accessible internally via Docker network at backend:8002
+    # Note: env_file removed - secrets come from Doppler via doppler run
+    environment:
+      # Environment configuration
+      - ENVIRONMENT=production
+      - PORT=8002
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - CORS_ORIGINS=${CORS_ORIGINS:-}
+      # Override QUEUE_URL to use Docker service name
+      - QUEUE_URL=redis://redis:6379/0
+      # Ensure Prometheus is enabled
+      - PROMETHEUS_ENABLED=true
+      - PROMETHEUS_METRICS_ROUTE=/metrics
+      # Uvicorn production settings
+      - UVICORN_WORKERS=${UVICORN_WORKERS:-4}
+      - UVICORN_TIMEOUT_KEEP_ALIVE=${UVICORN_TIMEOUT_KEEP_ALIVE:-5}
+      - UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN=${UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN:-30}
+      - UVICORN_ACCESS_LOG=${UVICORN_ACCESS_LOG:-false}
+      - UVICORN_LOG_LEVEL=${UVICORN_LOG_LEVEL:-info}
+    volumes:
+      - ./jobs:/app/jobs
+      - ./checkpoints:/app/checkpoints
+      - ./backend/cache:/app/backend/cache
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "sh", "-c", "curl -f http://localhost:${PORT:-8002}/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    # Resource limits for production
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    networks:
+      - refrakt-network
+    restart: unless-stopped
+
+  # SAQ Worker service (production)
+  # Uses same image as backend with different command
+  worker:
+    image: ${REFRAKT_IMAGE:-refrakt:latest}
+    container_name: refrakt-worker-prod
+    command: python -m backend.worker_main
+    # Note: env_file removed - secrets come from Doppler via doppler run
+    environment:
+      # Environment configuration
+      - ENVIRONMENT=production
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      # Override QUEUE_URL to use Docker service name
+      - QUEUE_URL=redis://redis:6379/0
+    volumes:
+      - ./jobs:/app/jobs
+      - ./checkpoints:/app/checkpoints
+    depends_on:
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    # Resource limits and GPU access for production
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    networks:
+      - refrakt-network
+    restart: unless-stopped
+
+  # Prometheus monitoring service
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: refrakt-prometheus-prod
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.prod.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus/docker-entrypoint.sh:/docker-entrypoint.sh
+      - prometheus_data:/prometheus
+    entrypoint: ["/bin/sh", "/docker-entrypoint.sh"]
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=15d'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    environment:
+      - ENVIRONMENT=production
+      # Bearer token for scraping (optional - only used if set)
+      - PROMETHEUS_BEARER_TOKEN=${PROMETHEUS_BEARER_TOKEN:-}
+    networks:
+      - refrakt-network
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Cloudflare Tunnel service - Instance 1 (ingress layer)
+  # Multiple tunnel instances provide redundancy and load distribution
+  # All instances connect to the same tunnel ID and route to the same backend
+  cloudflared-1:
+    image: cloudflare/cloudflared:latest
+    container_name: refrakt-cloudflared-prod-1
+    command: tunnel --config /etc/cloudflared/config.yml run
+    volumes:
+      # Mount prod.yml and credentials from host (pulled from Doppler)
+      - ./prod.yml:/etc/cloudflared/config.yml:ro
+      - ./cloudflare:/etc/cloudflared/cloudflare:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - refrakt-network
+    restart: unless-stopped
+    healthcheck:
+      # Health check verifies tunnel can reach backend service
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://backend:8002/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 128M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+    labels:
+      - "refrakt.service=cloudflared"
+      - "refrakt.instance=1"
+      - "refrakt.tunnel.id=220bc2f3-cd03-4c06-b658-20c8c718cc04"
+    # Cloudflared doesn't expose ports - it connects to Cloudflare's network
+
+  # Cloudflare Tunnel service - Instance 2 (ingress layer)
+  cloudflared-2:
+    image: cloudflare/cloudflared:latest
+    container_name: refrakt-cloudflared-prod-2
+    command: tunnel --config /etc/cloudflared/config.yml run
+    volumes:
+      # Mount prod.yml and credentials from host (pulled from Doppler)
+      - ./prod.yml:/etc/cloudflared/config.yml:ro
+      - ./cloudflare:/etc/cloudflared/cloudflare:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - refrakt-network
+    restart: unless-stopped
+    healthcheck:
+      # Health check verifies tunnel can reach backend service
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://backend:8002/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 128M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+    labels:
+      - "refrakt.service=cloudflared"
+      - "refrakt.instance=2"
+      - "refrakt.tunnel.id=220bc2f3-cd03-4c06-b658-20c8c718cc04"
+    # Cloudflared doesn't expose ports - it connects to Cloudflare's network
+
+  # Cloudflare Tunnel service - Instance 3 (ingress layer)
+  cloudflared-3:
+    image: cloudflare/cloudflared:latest
+    container_name: refrakt-cloudflared-prod-3
+    command: tunnel --config /etc/cloudflared/config.yml run
+    volumes:
+      # Mount prod.yml and credentials from host (pulled from Doppler)
+      - ./prod.yml:/etc/cloudflared/config.yml:ro
+      - ./cloudflare:/etc/cloudflared/cloudflare:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - refrakt-network
+    restart: unless-stopped
+    healthcheck:
+      # Health check verifies tunnel can reach backend service
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://backend:8002/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 128M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+    labels:
+      - "refrakt.service=cloudflared"
+      - "refrakt.instance=3"
+      - "refrakt.tunnel.id=220bc2f3-cd03-4c06-b658-20c8c718cc04"
+    # Cloudflared doesn't expose ports - it connects to Cloudflare's network
+
+volumes:
+  redis_data:
+    driver: local
+  prometheus_data:
+    driver: local
+
+networks:
+  refrakt-network:
+    driver: bridge
+

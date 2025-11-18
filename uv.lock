@@ -2204,6 +2204,7 @@ dependencies = [
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "numpy", version = "2.3.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "scikit-learn" },
+    { name = "seaborn" },
 ]
 
 [package.optional-dependencies]
@@ -2215,7 +2216,6 @@ dev = [
 interactive = [
     { name = "pillow" },
     { name = "plotly" },
-    { name = "seaborn" },
 ]
 
 [package.metadata]
@@ -2228,7 +2228,7 @@ requires-dist = [
     { name = "plotly", marker = "extra == 'interactive'", specifier = ">=5.0.0" },
     { name = "radon", marker = "extra == 'dev'", specifier = ">=5.0.0" },
     { name = "scikit-learn", specifier = ">=0.24.0" },
-    { name = "seaborn", marker = "extra == 'interactive'", specifier = ">=0.11.0" },
+    { name = "seaborn", specifier = ">=0.11.0" },
 ]
 provides-extras = ["interactive", "dev"]
 
