@@ -61,7 +61,7 @@ services:
     volumes:
       - ./jobs:/app/jobs
       - ./checkpoints:/app/checkpoints
-      - ./backend/cache:/app/backend/cache
+      - backend_cache:/app/backend/cache
     depends_on:
       redis:
         condition: service_healthy
@@ -273,6 +273,8 @@ volumes:
   redis_data:
     driver: local
   prometheus_data:
+    driver: local
+  backend_cache:
     driver: local
 
 networks:
