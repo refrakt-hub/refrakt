@@ -89,6 +89,22 @@ if [ -f dev.yml ]; then
     cloudflared tunnel --config dev.yml validate 2>/dev/null && echo "✅ dev.yml is valid" || echo "⚠️  dev.yml validation failed"
 fi
 if [ -f prod.yml ]; then
-    cloudflared tunnel --config prod.yml validate 2>/dev/null && echo "✅ prod.yml is valid" || echo "⚠️  prod.yml validation failed"
+    # prod.yml uses Docker container paths, so create a temp validation version with host paths
+    PROD_TUNNEL_ID=$(grep -E "^tunnel:" prod.yml | awk '{print $2}' | tr -d '\r\n')
+    if [ -n "$PROD_TUNNEL_ID" ] && [ -f "cloudflare/${PROD_TUNNEL_ID}.json" ]; then
+        # Create temporary validation config with host path
+        TEMP_PROD_VALIDATION="prod.yml.validation.tmp"
+        sed "s|credentials-file: /etc/cloudflared/cloudflare/|credentials-file: ./cloudflare/|" prod.yml > "$TEMP_PROD_VALIDATION"
+        if cloudflared tunnel --config "$TEMP_PROD_VALIDATION" validate 2>&1; then
+            echo "✅ prod.yml is valid (validated with host paths)"
+        else
+            echo "⚠️  prod.yml validation failed (check error above)"
+        fi
+        rm -f "$TEMP_PROD_VALIDATION"
+    else
+        echo "⚠️  Cannot validate prod.yml: tunnel ID or credentials file not found"
+        echo "   Tunnel ID: ${PROD_TUNNEL_ID:-not found}"
+        echo "   Credentials file: cloudflare/${PROD_TUNNEL_ID:-unknown}.json"
+    fi
 fi
 

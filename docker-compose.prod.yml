@@ -38,12 +38,15 @@ services:
     # Note: No port mapping to host - cloudflared handles ingress
     # Backend is accessible internally via Docker network at backend:8002
     # Note: env_file removed - secrets come from Doppler via doppler run
+    # All ${VAR} variables are injected by doppler run
     environment:
       # Environment configuration
       - ENVIRONMENT=production
       - PORT=8002
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - CORS_ORIGINS=${CORS_ORIGINS:-}
+      # API Keys (from Doppler)
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
       # Override QUEUE_URL to use Docker service name
       - QUEUE_URL=redis://redis:6379/0
       # Ensure Prometheus is enabled
@@ -88,10 +91,13 @@ services:
     container_name: refrakt-worker-prod
     command: python -m backend.worker_main
     # Note: env_file removed - secrets come from Doppler via doppler run
+    # All ${VAR} variables are injected by doppler run
     environment:
       # Environment configuration
       - ENVIRONMENT=production
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      # API Keys (from Doppler)
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
       # Override QUEUE_URL to use Docker service name
       - QUEUE_URL=redis://redis:6379/0
     volumes:
